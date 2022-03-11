@@ -1,5 +1,10 @@
 {
-    "require": {
-        "mikehaertl/php-pdftk": "^0.9.1"
-    }
+	"require" : {
+		"mikehaertl/php-pdftk" : "^0.9.1",
+		"phpoffice/phpspreadsheet" : "^1.15",
+		"setasign/fpdf": "^1.8",
+		"setasign/fpdi": "^2.3"
+	},
+	"name" : "elvisoliveira/cmanager-reports",
+	"description" : "Report PDF Scripts"
 }
