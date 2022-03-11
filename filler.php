@@ -11,6 +11,9 @@ use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
+$month = readline("Enter a month: ");
+if(!is_numeric($month) || $month < 1 || $month > 12) die("Invalid month");
+
 $months = array(
     1 => 'September',
     2 => 'October',
@@ -33,8 +36,6 @@ $columns = array(
     "Studies",
     "Remarks"
 );
-
-$month = 1;
 $monthName = $months[$month];
 $serviceYear = 2022;
 $directory = sprintf("%s/pdf/Publisher Recordings", getcwd());
@@ -186,7 +187,7 @@ if ($handle = opendir($directory))
     }
 
     $writer = IOFactory::createWriter($spreadsheet, 'Xls');
-    $writer->save(__DIR__ . "/excel/{$serviceYear}-{$month}.xlsx");
+    $writer->save(getcwd() . "/excel/{$serviceYear}-{$month}.xlsx");
 }
 
 function getStyle($value, $bg) {
