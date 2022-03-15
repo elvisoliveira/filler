@@ -11,10 +11,13 @@ use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-$month = readline("Enter a month: ");
-if(!is_numeric($month) || $month < 1 || $month > 12) die("Invalid month");
+$month = readline(lang('MONTH_INPUT'));
+if(!is_numeric($month) || $month < 1 || $month > 12) die(lang('MONTH_INVALID'));
 
-$months = array(
+$processPDF = readline(lang('PDF_PROCESS'));
+$processPDF = empty($processPDF) ? 0 : (!is_numeric($processPDF) || $processPDF > 1 || $processPDF < 0 ? die(lang('PDF_INVALID')) : $processPDF);
+
+$months = [
     1 => 'September',
     2 => 'October',
     3 => 'November',
@@ -104,10 +107,13 @@ if ($handle = opendir($directory))
             $publisherSheet->fromArray($row, null, "A{$index}");
             $index++;
 
-            $pdf = new Pdf("{$directory}/{$fileName}");
-            $pdf->fillForm($data);
-            if (!$pdf->saveAs("{$directory}/{$fileName}")) {
-                die($pdf->getError());
+            if($processPDF)
+            {
+                $pdf = new Pdf("{$directory}/{$fileName}");
+                $pdf->fillForm($data);
+                if (!$pdf->saveAs("{$directory}/{$fileName}")) {
+                    die($pdf->getError());
+                }
             }
 
             print $fileName . PHP_EOL;
