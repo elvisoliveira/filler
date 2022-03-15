@@ -41,7 +41,7 @@ $columns = array(
 );
 $monthName = $months[$month];
 $serviceYear = 2022;
-$directory = sprintf("%s/pdf/Publisher Recordings", getcwd());
+$directory = sprintf("%s/pdf/%s", getcwd(), lang('FOLDER_PUBLISHER'));
 $prefix = 1;
 $suffix = $prefix > 1 ? "_{$prefix}" : "";
 
@@ -54,7 +54,7 @@ $suffix = $prefix > 1 ? "_{$prefix}" : "";
 $reports = [];
 $reportsFile = sprintf("%s/reports/%s-%s.csv", getcwd(), $serviceYear, $month);
 if (!file_exists($reportsFile)) {
-    die("Reports file not found");
+    die(lang('NOT_FOUND_REPORT'));
 }
 if (($handle = fopen($reportsFile, 'r')) !== FALSE) {
     while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
@@ -68,7 +68,7 @@ if (($handle = fopen($reportsFile, 'r')) !== FALSE) {
 $meetings = [];
 $meetingsFile = sprintf("%s/attendence/%s-%s.csv", getcwd(), $serviceYear, $month);
 if (!file_exists($meetingsFile)) {
-    die("Attendence file not found");
+    die(lang('NOT_FOUND_ATTENDENCE'));
 }
 if (($handle = fopen($meetingsFile, 'r')) !== FALSE) {
     while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
@@ -85,7 +85,7 @@ if ($handle = opendir($directory))
     $spreadsheet = new Spreadsheet();
     $spreadsheet->setActiveSheetIndex(0);
     $publisherSheet = $spreadsheet->getActiveSheet();
-    $publisherSheet->setTitle('Publisher Recordings');
+    $publisherSheet->setTitle(lang('FOLDER_PUBLISHER'));
 
     $index = 1;
     foreach($reports as $fileName => $report) {
@@ -223,4 +223,17 @@ function getStyle($value, $bg) {
             ]
         ]
     ];
+}
+
+function lang($phrase) {
+    static $lang = [
+        'NOT_FOUND_REPORT'     => 'Reports file not found',
+        'NOT_FOUND_ATTENDENCE' => 'Attendence file not found',
+        'MONTH_INPUT'          => "Input the service year month number [1-12]: ",
+        'MONTH_INVALID'        => "Invalid month",
+        'FOLDER_PUBLISHER'     => "Publisher Recordings",
+        'PDF_PROCESS'          => "Process PDF [0 = No, 1 = Yes, default = 0]: ",
+        'PDF_INVALID'          => "Invalid PDF param"
+    ];
+    return $lang[$phrase];
 }
