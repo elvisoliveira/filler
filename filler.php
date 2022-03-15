@@ -93,15 +93,15 @@ if ($handle = opendir($directory))
     $index = 1;
     foreach($reports as $fileName => $report) {
         if (preg_match('/\.pdf$/', $fileName) && isset($report)) {
-            $data = array(
-                "Service Year{$suffix}"         => $serviceYear,
-                "{$prefix}-Place_{$month}"      => intval($report[1]),
-                "{$prefix}-Video_{$month}"      => intval($report[2]),
-                "{$prefix}-Hours_{$month}"      => intval($report[3]),
-                "{$prefix}-RV_{$month}"         => intval($report[4]),
-                "{$prefix}-Studies_{$month}"    => intval($report[5]),
-                "Remarks{$monthName}{$suffix}"  => $report[6]
-            );
+            $data = [
+                "Service Year{$suffix}"             => $serviceYear,
+                "{$prefix}-{$columns[0]}_{$month}"   => intval($report[1]),
+                "{$prefix}-{$columns[1]}_{$month}"   => intval($report[2]),
+                "{$prefix}-{$columns[2]}_{$month}"   => intval($report[3]),
+                "{$prefix}-{$columns[3]}_{$month}"   => intval($report[4]),
+                "{$prefix}-{$columns[4]}_{$month}"   => intval($report[5]),
+                "{$columns[5]}{$monthName}{$suffix}" => $report[6]
+            ];
             $assignment = $report[0];
             $row = array_merge(array($assignment, pathinfo($fileName, PATHINFO_FILENAME)), array_values($data));
 
