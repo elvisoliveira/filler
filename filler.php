@@ -30,15 +30,20 @@ $months = [
     10 => 'June',
     11 => 'July',
     12 => 'August'
-);
-$columns = array(
-    "Place",
-    "Video",
-    "Hours",
-    "RV",
-    "Studies",
-    "Remarks"
-);
+];
+$columns = [
+    'Place',
+    'Video',
+    'Hours',
+    'RV',
+    'Studies',
+    'Remarks'
+];
+$segments = [
+    'P' => [0, 0, 0, 0, 0, 0],
+    'R' => [0, 0, 0, 0, 0, 0],
+    'A' => [0, 0, 0, 0, 0, 0]
+];
 $monthName = $months[$month];
 $serviceYear = 2022;
 $directory = sprintf("%s/pdf/%s", getcwd(), lang('FOLDER_PUBLISHER'));
@@ -92,6 +97,12 @@ if ($handle = opendir($directory))
 
     $index = 1;
     foreach($reports as $fileName => $report) {
+        $segments[$report[0]][0] += $report[1];
+        $segments[$report[0]][1] += $report[2];
+        $segments[$report[0]][2] += $report[3];
+        $segments[$report[0]][3] += $report[4];
+        $segments[$report[0]][4] += $report[5];
+        $segments[$report[0]][5] ++;
         if (preg_match('/\.pdf$/', $fileName) && isset($report)) {
             $data = [
                 "Service Year{$suffix}"             => $serviceYear,
@@ -103,7 +114,7 @@ if ($handle = opendir($directory))
                 "{$columns[5]}{$monthName}{$suffix}" => $report[6]
             ];
             $assignment = $report[0];
-            $row = array_merge(array($assignment, pathinfo($fileName, PATHINFO_FILENAME)), array_values($data));
+            $row = array_merge([$assignment, pathinfo($fileName, PATHINFO_FILENAME)], array_values($data));
 
             unset($row[2]);
 
@@ -123,6 +134,16 @@ if ($handle = opendir($directory))
         }
     }
     closedir($handle);
+
+    $spreadsheet->createSheet();
+    $spreadsheet->setActiveSheetIndex(1);
+    $publisherTotalSheet = $spreadsheet->getActiveSheet();
+    $publisherTotalSheet->setTitle("Publisher Recordings Totals");
+    $index = 1;
+    foreach($segments as $privilege => $data) {
+        $publisherTotalSheet->fromArray(array_merge([$privilege], $data), null, "A{$index}");
+        $index++;
+    }
 
     foreach ($publisherSheet->getRowIterator() as $row) {
         $rowId = $row->getRowIndex();
@@ -150,7 +171,7 @@ if ($handle = opendir($directory))
     }
 
     $spreadsheet->createSheet();
-    $spreadsheet->setActiveSheetIndex(1);
+    $spreadsheet->setActiveSheetIndex(2);
     $attendenceSheet = $spreadsheet->getActiveSheet();
     $attendenceSheet->setTitle('Meeting Attendence');
 
