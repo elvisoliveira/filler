@@ -43,7 +43,7 @@ $monthName = $months[$month];
 $serviceYear = 2022;
 $directory = sprintf("%s/pdf/%s", getcwd(), lang('FOLDER_PUBLISHER'));
 $prefix = 1;
-$suffix = $prefix > 1 ? "_{$prefix}" : "";
+$suffix = $prefix > 1 ? "_{$prefix}" : '';
 
 // Placements
 // Video Showings
@@ -59,6 +59,9 @@ if (!file_exists($reportsFile)) {
 if (($handle = fopen($reportsFile, 'r')) !== FALSE) {
     while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
         $name = trim($data[0]);
+        if(empty($name)) {
+            continue;
+        }
         unset($data[0]);
         $reports["{$name}.pdf"] = array_map('trim', array_values($data));
     }
