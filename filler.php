@@ -14,8 +14,8 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 $month = readline(lang('MONTH_INPUT'));
 if(!is_numeric($month) || $month < 1 || $month > 12) die(lang('MONTH_INVALID'));
 
-$processPDF = readline(lang('PDF_PROCESS'));
-$processPDF = empty($processPDF) ? 0 : (!is_numeric($processPDF) || $processPDF > 1 || $processPDF < 0 ? die(lang('PDF_INVALID')) : $processPDF);
+$runPDF = readline(lang('PDF_PROCESS'));
+$runPDF = empty($runPDF) ? 0 : (!is_numeric($runPDF) || $runPDF > 1 || $runPDF < 0 ? die(lang('PDF_INVALID')) : $runPDF);
 
 $months = [
     1 => 'September',
@@ -113,7 +113,7 @@ if ($handle = opendir($directory))
             $publisherSheet->fromArray($row, null, "A{$index}");
             $index++;
 
-            if($processPDF) {
+            if($runPDF) {
                 $pdf = new Pdf("{$directory}/{$fileName}");
                 $pdf->fillForm($data);
                 if (!$pdf->saveAs("{$directory}/{$fileName}")) {
@@ -165,9 +165,10 @@ if ($handle = opendir($directory))
 
             if($columnId == "A" && $cellValue <> NULL) {
                 $date = DateTime::createFromFormat('Y-m-d', $cellValue);
+                $format = true ? 'NNNNMMMM DD, YYYY' : NumberFormat::FORMAT_DATE_YYYYMMDD;
 
                 $attendenceSheet->setCellValue($cell, Date::PHPToExcel($date));
-                $attendenceSheet->getStyle($cell)->getNumberFormat()->setFormatCode(true ? 'NNNNMMMM DD, YYYY' : NumberFormat::FORMAT_DATE_YYYYMMDD);
+                $attendenceSheet->getStyle($cell)->getNumberFormat()->setFormatCode($format);
 
                 switch ($date->format('l')) {
                     case "Sunday":
