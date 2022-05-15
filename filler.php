@@ -32,17 +32,17 @@ $months = [
     12 => 'August'
 ];
 $columns = [
-    'Place',
-    'Video',
-    'Hours',
-    'RV',
-    'Studies',
-    'Remarks'
+    'Place' => 'Placements',
+    'Video' => 'Video Showings',
+    'Hours' => 'Hours',
+    'RV' => 'Return Visits',
+    'Studies' => 'Bible Studies',
+    'Remarks' => 'Observation'
 ];
 $segments = [
-    'P' => [0, 0, 0, 0, 0, 0],
-    'R' => [0, 0, 0, 0, 0, 0],
-    'A' => [0, 0, 0, 0, 0, 0]
+    'P' => [0, 0, 0, 0, 0, 0], // Publishers
+    'R' => [0, 0, 0, 0, 0, 0], // Regular Pioneers
+    'A' => [0, 0, 0, 0, 0, 0]  // Auxiliary Pioneers
 ];
 $monthName = $months[$month];
 $serviceYear = 2022;
@@ -50,17 +50,11 @@ $directory = sprintf("%s/pdf/%s", getcwd(), lang('FOLDER_PUBLISHER'));
 $prefix = 1;
 $suffix = $prefix > 1 ? "_{$prefix}" : '';
 
-// Placements
-// Video Showings
-// Hours
-// Return Visits
-// Bible Studies
-// Observation
-$reports = [];
 $reportsFile = sprintf("%s/reports/%s-%s.csv", getcwd(), $serviceYear, $month);
 if (!file_exists($reportsFile)) {
     die(lang('NOT_FOUND_REPORT'));
 }
+$reports = [];
 if (($handle = fopen($reportsFile, 'r')) !== FALSE) {
     while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
         $name = trim($data[0]);
@@ -72,12 +66,12 @@ if (($handle = fopen($reportsFile, 'r')) !== FALSE) {
     }
 }
 
-// Assistência Reunião
-$meetings = [];
+// Meeting Attendance
 $meetingsFile = sprintf("%s/attendence/%s-%s.csv", getcwd(), $serviceYear, $month);
 if (!file_exists($meetingsFile)) {
     die(lang('NOT_FOUND_ATTENDENCE'));
 }
+$meetings = [];
 if (($handle = fopen($meetingsFile, 'r')) !== FALSE) {
     while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
         array_push($meetings, array_map('trim', $data));
@@ -92,27 +86,25 @@ if ($handle = opendir($directory))
 {
     $spreadsheet = new Spreadsheet();
     $spreadsheet->setActiveSheetIndex(0);
-    $publisherSheet = $spreadsheet->getActiveSheet();
+    $publisherSheet = $spreadsheet->getActiveSheet()->freezePane('A2');
     $publisherSheet->setTitle(lang('FOLDER_PUBLISHER'));
+    $publisherSheet->fromArray(array_merge(['', ''], array_values($columns)), null, "A1");
 
-    $index = 1;
+    $index = 2;
     foreach($reports as $fileName => $report) {
-        $segments[$report[0]][0] += $report[1];
-        $segments[$report[0]][1] += $report[2];
-        $segments[$report[0]][2] += $report[3];
-        $segments[$report[0]][3] += $report[4];
-        $segments[$report[0]][4] += $report[5];
-        $segments[$report[0]][5] ++;
-        if (preg_match('/\.pdf$/', $fileName) && isset($report)) {
-            $data = [
-                "Service Year{$suffix}"             => $serviceYear,
-                "{$prefix}-{$columns[0]}_{$month}"   => intval($report[1]),
-                "{$prefix}-{$columns[1]}_{$month}"   => intval($report[2]),
-                "{$prefix}-{$columns[2]}_{$month}"   => intval($report[3]),
-                "{$prefix}-{$columns[3]}_{$month}"   => intval($report[4]),
-                "{$prefix}-{$columns[4]}_{$month}"   => intval($report[5]),
-                "{$columns[5]}{$monthName}{$suffix}" => $report[6]
-            ];
+        for ($i = 0; $i <= 4; $i++) {
+            $segments[$report[0]][$i] += $report[$i + 1];
+        }
+        $segments[$report[0]][5]++;
+        if (preg_match('/\.pdf$/', $fileName) && isset($report))
+        {
+            $data["Service Year{$suffix}"] = $serviceYear;
+            $indexColumns = array_keys($columns);
+            for ($i = 0; $i <= 4; $i++) {
+                $data["{$prefix}-{$indexColumns[$i]}_{$month}"] = intval($report[$i + 1]);
+            }
+            $data["{$indexColumns[5]}{$monthName}{$suffix}"] = $report[6];
+
             $assignment = $report[0];
             $row = array_merge([$assignment, pathinfo($fileName, PATHINFO_FILENAME)], array_values($data));
 
@@ -121,8 +113,7 @@ if ($handle = opendir($directory))
             $publisherSheet->fromArray($row, null, "A{$index}");
             $index++;
 
-            if($processPDF)
-            {
+            if($processPDF) {
                 $pdf = new Pdf("{$directory}/{$fileName}");
                 $pdf->fillForm($data);
                 if (!$pdf->saveAs("{$directory}/{$fileName}")) {
@@ -135,47 +126,30 @@ if ($handle = opendir($directory))
     }
     closedir($handle);
 
+    setAutoSize($publisherSheet);
+
+    array_pop($columns);
+
     $spreadsheet->createSheet();
     $spreadsheet->setActiveSheetIndex(1);
-    $publisherTotalSheet = $spreadsheet->getActiveSheet();
-    $publisherTotalSheet->setTitle("Publisher Recordings Totals");
-    $index = 1;
+    $publisherTotalSheet = $spreadsheet->getActiveSheet()->freezePane('A2');
+    $publisherTotalSheet->fromArray(array_merge([''], array_values($columns), ['Number of Reports']), null, "A1");
+    $publisherTotalSheet->setTitle(lang('TAB_TOTALS'));
+    $index = 2;
     foreach($segments as $privilege => $data) {
         $publisherTotalSheet->fromArray(array_merge([$privilege], $data), null, "A{$index}");
         $index++;
     }
 
-    foreach ($publisherSheet->getRowIterator() as $row) {
-        $rowId = $row->getRowIndex();
-        foreach($row->getCellIterator() as $column) {
-            $columnId = $column->getColumn();
-            $value = $publisherSheet->getCell("{$columnId}{$rowId}")->getValue();
-            if($columnId == "A") {
-                switch ($value) {
-                    case "P":
-                        $bg = Color::COLOR_YELLOW;
-                        break;
-                    case "R":
-                        $bg = Color::COLOR_RED;
-                        break;
-                    case "A":
-                        $bg = Color::COLOR_GREEN;
-                        break;
-                    default:
-                        $bg = Color::COLOR_WHITE;
-                }
-            }
-            $publisherSheet->getStyle("{$columnId}{$rowId}")->applyFromArray(getStyle($value, $bg));
-            $publisherSheet->getColumnDimension($columnId)->setAutoSize(true);
-        }
-    }
+    setAutoSize($publisherTotalSheet);
 
     $spreadsheet->createSheet();
     $spreadsheet->setActiveSheetIndex(2);
-    $attendenceSheet = $spreadsheet->getActiveSheet();
-    $attendenceSheet->setTitle('Meeting Attendence');
+    $attendenceSheet = $spreadsheet->getActiveSheet()->freezePane('A2');
+    $attendenceSheet->fromArray(['', 'Total', 'Foreigners Only'], null, "A1");
+    $attendenceSheet->setTitle(lang('TAB_ATTENDENCE'));
 
-    $index = 1;
+    $index = 2;
     foreach($meetings as $meeting) {
         $attendenceSheet->fromArray($meeting, null, "A{$index}");
         $index++;
@@ -184,11 +158,12 @@ if ($handle = opendir($directory))
     foreach ($attendenceSheet->getRowIterator() as $row) {
         $rowId = $row->getRowIndex();
         foreach($row->getCellIterator() as $column) {
+            $bg = Color::COLOR_WHITE;
             $columnId = $column->getColumn();
             $cell = "{$columnId}{$rowId}";
             $cellValue = $attendenceSheet->getCell($cell)->getValue();
 
-            if($columnId == "A") {
+            if($columnId == "A" && $cellValue <> NULL) {
                 $date = DateTime::createFromFormat('Y-m-d', $cellValue);
 
                 $attendenceSheet->setCellValue($cell, Date::PHPToExcel($date));
@@ -206,8 +181,6 @@ if ($handle = opendir($directory))
                     case "Friday":
                         $bg = Color::COLOR_RED;
                         break;
-                    default:
-                        $bg = Color::COLOR_WHITE;
                 }
             }
 
@@ -218,6 +191,33 @@ if ($handle = opendir($directory))
 
     $writer = IOFactory::createWriter($spreadsheet, 'Xls');
     $writer->save(getcwd() . "/excel/{$serviceYear}-{$month}.xlsx");
+}
+
+function setAutoSize($sheet) {
+    foreach ($sheet->getRowIterator() as $row) {
+        $rowId = $row->getRowIndex();
+        foreach($row->getCellIterator() as $column) {
+            $columnId = $column->getColumn();
+            $value = $sheet->getCell("{$columnId}{$rowId}")->getValue();
+            if($columnId == "A") {
+                switch ($value) {
+                    case "P":
+                        $bg = Color::COLOR_YELLOW;
+                        break;
+                    case "R":
+                        $bg = Color::COLOR_RED;
+                        break;
+                    case "A":
+                        $bg = Color::COLOR_GREEN;
+                        break;
+                    default:
+                        $bg = Color::COLOR_WHITE;
+                }
+            }
+            $sheet->getStyle("{$columnId}{$rowId}")->applyFromArray(getStyle($value, $bg));
+            $sheet->getColumnDimension($columnId)->setAutoSize(true);
+        }
+    }
 }
 
 function getStyle($value, $bg) {
@@ -253,11 +253,13 @@ function lang($phrase) {
     static $lang = [
         'NOT_FOUND_REPORT'     => 'Reports file not found',
         'NOT_FOUND_ATTENDENCE' => 'Attendence file not found',
-        'MONTH_INPUT'          => "Input the service year month number [1-12]: ",
-        'MONTH_INVALID'        => "Invalid month",
-        'FOLDER_PUBLISHER'     => "Publisher Recordings",
-        'PDF_PROCESS'          => "Process PDF [0 = No, 1 = Yes, default = 0]: ",
-        'PDF_INVALID'          => "Invalid PDF param"
+        'MONTH_INPUT'          => 'Input the service year month number [1-12]: ',
+        'MONTH_INVALID'        => 'Invalid month',
+        'FOLDER_PUBLISHER'     => 'Publisher Recordings',
+        'PDF_PROCESS'          => 'Process PDF [0 = No, 1 = Yes, default = 0]: ',
+        'PDF_INVALID'          => 'Invalid PDF param',
+        'TAB_TOTALS'           => 'Publisher Recordings Totals',
+        'TAB_ATTENDENCE'       => 'Meeting Attendence'
     ];
     return $lang[$phrase];
 }
