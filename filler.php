@@ -262,6 +262,49 @@ function savePDF($file, $data) {
     print $file . PHP_EOL;
 }
 
+function calcPDF($entry) {
+    $columns = ["Place", "Video", "Hours", "RV", "Studies", "Remarks"];
+    $average = 0;
+    $total = [];
+    $pdfReader = new Pdf($entry);
+    $fields = $pdfReader->getDataFields();
+    foreach($fields as $index => $field) {
+        $name = $field['FieldName'];
+        $value = $field['FieldValue'] ?? null;
+        foreach($columns as $column) {
+            if(!isset($total[$column])) {
+                $total[$column] = 0;
+            }
+            for ($i = 1; $i <= 12; $i++) {
+                if($name == "1-{$column}_{$i}" && is_numeric($value)) {
+                    $total[$column] = $total[$column] + intval($value);
+                    if($column == "Hours") {
+                        $average++;
+                    }
+                }
+            }
+        }
+        if (strpos($name, 'Remarks') !== false && isset($value) && $name !== "RemarksTotal" && $name !== "RemarksAverage") {
+            $int = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT);
+            if(is_numeric($int)) {
+                $total['Remarks'] = $total['Remarks'] + $int;
+            }
+        }
+    }
+    $data = [];
+    foreach($columns as $column) {
+        $valueTotal = intval($total[$column]);
+        $valueAverage = $valueTotal / $average;
+        if($column == "Remarks") {
+            $data = array_merge($data, ["RemarksTotal" => $valueTotal], ["RemarksAverage" => round($valueAverage, 2)]);
+        }
+        else {
+            $data = array_merge($data, ["1-{$column}_Total" => $valueTotal], ["1-{$column}_Average" => round($valueAverage, 2)]);
+        }
+    }
+    savePDF($entry, $data);
+}
+
 function setSizeAndColors($sheet) {
     foreach ($sheet->getRowIterator() as $row) {
         $rowId = $row->getRowIndex();
@@ -301,53 +344,6 @@ function setSizeAndColors($sheet) {
             $sheet->getColumnDimension($columnId)->setAutoSize(true);
         }
     }
-}
-
-function calcPDF($entry) {
-    $columns = ["Place", "Video", "Hours", "RV", "Studies", "Remarks"];
-    $average = 0;
-    $total = [];
-    $pdfReader = new Pdf($entry);
-    $fields = $pdfReader->getDataFields();
-    foreach($fields as $index => $field) {
-        if($field['FieldType'] != "Text") {
-            print_r($field);
-        }
-        $name = $field['FieldName'];
-        $value = $field['FieldValue'] ?? null;
-        foreach($columns as $column) {
-            if(!isset($total[$column])) {
-                $total[$column] = 0;
-            }
-            for ($i = 1; $i <= 12; $i++) {
-                if($name == "1-{$column}_{$i}" && is_numeric($value)) {
-                    $total[$column] = $total[$column] + intval($value);
-                    if($column == "Hours") {
-                        $average++;
-                    }
-                }
-            }
-        }
-        if (strpos($name, 'Remarks') !== false && isset($value) && $name !== "RemarksTotal" && $name !== "RemarksAverage") {
-            $int = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT);
-            if(is_numeric($int)) {
-                $total['Remarks'] = $total['Remarks'] + $int;
-            }
-        }
-    }
-    die();
-    $data = [];
-    foreach($columns as $column) {
-        $valueTotal = intval($total[$column]);
-        $valueAverage = $valueTotal / $average;
-        if($column == "Remarks") {
-            $data = array_merge($data, ["RemarksTotal" => $valueTotal], ["RemarksAverage" => round($valueAverage, 2)]);
-        }
-        else {
-            $data = array_merge($data, ["1-{$column}_Total" => $valueTotal], ["1-{$column}_Average" => round($valueAverage, 2)]);
-        }
-    }
-    savePDF($entry, $data);
 }
 
 function isWeekend($date) {
