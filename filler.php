@@ -57,6 +57,7 @@ $directory = sprintf("%s/pdf/%s", getcwd(), lang('FOLDER_PUBLISHER'));
 $prefix = 1;
 $suffix = $prefix > 1 ? "_{$prefix}" : '';
 
+// Reports
 $reportsFile = sprintf("%s/reports/%s-%s.csv", getcwd(), $serviceYear, $month);
 if (!file_exists($reportsFile)) {
     die(lang('NOT_FOUND_REPORT'));
@@ -89,7 +90,7 @@ uasort($reports, function ($one, $two) {
     return $one[0] <=> $two[0];
 });
 
-if ($handle = opendir($directory)) {
+if (true) {
     $spreadsheet = new Spreadsheet();
     $spreadsheet->getDefaultStyle()->getFont()->setName('Arial');
     $spreadsheet->getDefaultStyle()->getFont()->setSize(11);
@@ -100,42 +101,34 @@ if ($handle = opendir($directory)) {
     $publisherSheet->fromArray(array_merge(['', ''], array_values($columns)), null, "A1");
 
     $index = 2;
-    foreach($reports as $fileName => $report) {
+    foreach($reports as $file => $report) {
+        // Calc totals
         for ($i = 0; $i <= 4; $i++) {
             $segments[$report[0]][$i] += $report[$i + 1];
         }
         $segments[$report[0]][5]++;
-        if (preg_match('/\.pdf$/', $fileName) && isset($report)) {
-            $data["Service Year{$suffix}"] = $serviceYear;
+        // PDF
+        if ($runPDF) {
+            // $data["Service Year{$suffix}"] = $serviceYear;
             $indexColumns = array_keys($columns);
             for ($i = 0; $i <= 4; $i++) {
                 $data["{$prefix}-{$indexColumns[$i]}_{$month}"] = intval($report[$i + 1]);
             }
             $data["{$indexColumns[5]}{$monthName}{$suffix}"] = $report[6];
 
-            $assignment = $report[0];
-            $row = array_merge([$assignment, pathinfo($fileName, PATHINFO_FILENAME)], array_values($data));
-
-            unset($row[2]);
-
-            $publisherSheet->fromArray($row, null, "A{$index}");
-            $index++;
-
-            if($runPDF) {
-                $pdf = new Pdf("{$directory}/{$fileName}");
-                $pdf->fillForm($data);
-                if (!$pdf->saveAs("{$directory}/{$fileName}")) {
-                    die($pdf->getError());
-                }
-            }
-
-            print $fileName . PHP_EOL;
+            doPDF("{$directory}/{$file}", $data);
         }
+        // XLS
+        $assignment = $report[0];
+        unset($report[0]);
+        $values = array_merge([$assignment, pathinfo($file, PATHINFO_FILENAME)], array_values($report));
+        $publisherSheet->fromArray($values, null, "A{$index}");
+        $index++;
     }
-    closedir($handle);
 
     setSizeAndColors($publisherSheet);
 
+    // Remove Observation column for the next procedures
     array_pop($columns);
 
     $spreadsheet->createSheet();
@@ -147,22 +140,18 @@ if ($handle = opendir($directory)) {
 
     $index = 2;
     foreach($segments as $privilege => $data) {
+        // PDF
         if($runPDF) {
             $fill = [];
             foreach(array_keys($columns) as $i => $column) {
                 $fill["{$prefix}-{$column}_{$month}"] = intval($data[$i]);
             }
+            // Fill the amount of reports on Observation
             $fill["{$indexColumns[5]}{$monthName}{$suffix}"] = intval($data[5]);
 
-            $file = sprintf("%s/../%s/%s.pdf", $directory, lang('FOLDER_TOTALS'), $data[6]);
-            $pdf = new Pdf($file);
-            $pdf->fillForm($fill);
-            if (!$pdf->saveAs($file)) {
-                die($pdf->getError());
-            }
-
-            print $data[6] . PHP_EOL;
+            doPDF(sprintf("%s/../%s/%s.pdf", $directory, lang('FOLDER_TOTALS'), $data[6]), $fill);
         }
+        // Remove privilege labels
         unset($data[6]);
         $publisherTotalSheet->fromArray(array_merge([$privilege], $data), null, "A{$index}");
         $index++;
@@ -184,6 +173,7 @@ if ($handle = opendir($directory)) {
 
     $index = 2;
     foreach($meetings as $meeting) {
+        // Calc the totals
         $date = DateTime::createFromFormat('Y-m-d', $meeting[0]);
 
         $isWeekend = isWeekend($date);
@@ -200,45 +190,73 @@ if ($handle = opendir($directory)) {
             }
         }
 
+        // XLS
         $attendenceSheet->fromArray($meeting, null, "A{$index}");
         $index++;
     }
 
-    if($runPDF) {
-        $_prefix = $prefix + 2;
-        $attendance = [
-            'Report of Meeting Attendance - Foreigners' => [
-                "{$prefix}-Meeting_{$month}" => $midweek[0],
-                "{$prefix}-Attendance_{$month}" => $midweek[2],
-                "{$prefix}-Average_{$month}" => round($midweek[2] / $midweek[0], 2),
-                "{$_prefix}-Meeting_{$month}" => $weekend[0],
-                "{$_prefix}-Attendance_{$month}" => $weekend[2],
-                "{$_prefix}-Average_{$month}" => round($weekend[2] / $weekend[0], 2)
-            ],
-            'Report of Meeting Attendance' => [
-                "{$prefix}-Meeting_{$month}" => $midweek[0],
-                "{$prefix}-Attendance_{$month}" => $midweek[1],
-                "{$prefix}-Average_{$month}" => round($midweek[1] / $midweek[0], 2),
-                "{$_prefix}-Meeting_{$month}" => $weekend[0],
-                "{$_prefix}-Attendance_{$month}" => $weekend[1],
-                "{$_prefix}-Average_{$month}" => round($weekend[1] / $weekend[0], 2)
-            ]
-        ];
+    setSizeAndColors($attendenceSheet);
 
-        foreach($attendance as $file => $reports) {
-            $path = sprintf("%s/../%s/%s.pdf", $directory, 'Meeting Attendence', $file);
-            $pdf = new Pdf($path);
-            $pdf->fillForm($reports);
-            if (!$pdf->saveAs($path)) {
-                die($pdf->getError());
-            }
+    // @TODO: Add this info on a new excel tab
+    $_prefix = $prefix + 2;
+    $attendance = [
+        'Report of Meeting Attendance - Foreigners' => [
+            "{$prefix}-Meeting_{$month}" => $midweek[0],
+            "{$prefix}-Attendance_{$month}" => $midweek[2],
+            "{$prefix}-Average_{$month}" => round($midweek[2] / $midweek[0], 2),
+            "{$_prefix}-Meeting_{$month}" => $weekend[0],
+            "{$_prefix}-Attendance_{$month}" => $weekend[2],
+            "{$_prefix}-Average_{$month}" => round($weekend[2] / $weekend[0], 2)
+        ],
+        'Report of Meeting Attendance' => [
+            "{$prefix}-Meeting_{$month}" => $midweek[0],
+            "{$prefix}-Attendance_{$month}" => $midweek[1],
+            "{$prefix}-Average_{$month}" => round($midweek[1] / $midweek[0], 2),
+            "{$_prefix}-Meeting_{$month}" => $weekend[0],
+            "{$_prefix}-Attendance_{$month}" => $weekend[1],
+            "{$_prefix}-Average_{$month}" => round($weekend[1] / $weekend[0], 2)
+        ]
+    ];
+
+    $columns = ['',
+        'Mid. Amount',
+        'Mid. Total',
+        'Mid. Average',
+        'Week. Amount',
+        'Week. Total',
+        'Week. Average'
+    ];
+
+    $spreadsheet->createSheet();
+    $spreadsheet->setActiveSheetIndex(3);
+    $attendenceTotalsSheet = $spreadsheet->getActiveSheet()->freezePane('A2');
+    $attendenceTotalsSheet->fromArray($columns, null, "A1");
+    $attendenceTotalsSheet->setTitle(lang('TAB_ATTENDENCE_TOTAL'));
+
+    $index = 2;
+    foreach($attendance as $file => $reports) {
+        // PDF
+        if($runPDF) {
+            doPDF(sprintf("%s/../%s/%s.pdf", $directory, 'Meeting Attendence', $file), $reports);
         }
+        // XLS
+        $attendenceTotalsSheet->fromArray(array_merge([$file], array_values($reports)), null, "A{$index}");
+        $index++;
     }
 
-    setSizeAndColors($attendenceSheet);
+    setSizeAndColors($attendenceTotalsSheet);
 
     $writer = IOFactory::createWriter($spreadsheet, 'Xls');
     $writer->save(getcwd() . "/excel/{$serviceYear}-{$month}.xlsx");
+}
+
+function doPDF($file, $data) {
+    $pdf = new Pdf($file);
+    $pdf->fillForm($data);
+    if (!$pdf->saveAs($file)) {
+        die($pdf->getError());
+    }
+    print $file . PHP_EOL;
 }
 
 function setSizeAndColors($sheet) {
@@ -337,7 +355,8 @@ function lang($phrase) {
         'PDF_PROCESS'          => 'Process PDF [0 = No, 1 = Yes, default = 0]: ',
         'PDF_INVALID'          => 'Invalid PDF param',
         'TAB_TOTALS'           => 'Publisher Recordings Totals',
-        'TAB_ATTENDENCE'       => 'Meeting Attendence'
+        'TAB_ATTENDENCE'       => 'Meeting Attendence',
+        'TAB_ATTENDENCE_TOTAL' => 'Meeting Attendence Totals'
     ];
     return $lang[$phrase];
 }
