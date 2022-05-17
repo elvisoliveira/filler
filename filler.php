@@ -53,7 +53,7 @@ $segments = [
 ];
 $monthName = $months[$month];
 $serviceYear = 2022; // @TODO: Make year to be an arg and user input
-$directory = sprintf("%s/pdf/%s", getcwd(), lang('FOLDER_PUBLISHER'));
+$directory = sprintf("%s/pdf", getcwd());
 $prefix = 1;
 $suffix = $prefix > 1 ? "_{$prefix}" : '';
 
@@ -116,7 +116,9 @@ if (true) {
             }
             $data["{$indexColumns[5]}{$monthName}{$suffix}"] = $report[6];
 
-            doPDF("{$directory}/{$file}", $data);
+            $file = sprintf("{$directory}/%s/{$file}", lang('FOLDER_PUBLISHER'));
+            savePDF($file, $data);
+            calcPDF($file);
         }
         // XLS
         $assignment = $report[0];
@@ -149,7 +151,9 @@ if (true) {
             // Fill the amount of reports on Observation
             $fill["{$indexColumns[5]}{$monthName}{$suffix}"] = intval($data[5]);
 
-            doPDF(sprintf("%s/../%s/%s.pdf", $directory, lang('FOLDER_TOTALS'), $data[6]), $fill);
+            $file = sprintf("%s/%s/%s.pdf", $directory, lang('FOLDER_TOTALS'), $data[6]);
+            savePDF($file, $fill);
+            calcPDF($file);
         }
         // Remove privilege labels
         unset($data[6]);
@@ -197,7 +201,6 @@ if (true) {
 
     setSizeAndColors($attendenceSheet);
 
-    // @TODO: Add this info on a new excel tab
     $_prefix = $prefix + 2;
     $attendance = [
         'Report of Meeting Attendance - Foreigners' => [
@@ -237,7 +240,7 @@ if (true) {
     foreach($attendance as $file => $reports) {
         // PDF
         if($runPDF) {
-            doPDF(sprintf("%s/../%s/%s.pdf", $directory, 'Meeting Attendence', $file), $reports);
+            savePDF(sprintf("%s/%s/%s.pdf", $directory, 'Meeting Attendence', $file), $reports);
         }
         // XLS
         $attendenceTotalsSheet->fromArray(array_merge([$file], array_values($reports)), null, "A{$index}");
@@ -250,7 +253,7 @@ if (true) {
     $writer->save(getcwd() . "/excel/{$serviceYear}-{$month}.xlsx");
 }
 
-function doPDF($file, $data) {
+function savePDF($file, $data) {
     $pdf = new Pdf($file);
     $pdf->fillForm($data);
     if (!$pdf->saveAs($file)) {
@@ -298,6 +301,53 @@ function setSizeAndColors($sheet) {
             $sheet->getColumnDimension($columnId)->setAutoSize(true);
         }
     }
+}
+
+function calcPDF($entry) {
+    $columns = ["Place", "Video", "Hours", "RV", "Studies", "Remarks"];
+    $average = 0;
+    $total = [];
+    $pdfReader = new Pdf($entry);
+    $fields = $pdfReader->getDataFields();
+    foreach($fields as $index => $field) {
+        if($field['FieldType'] != "Text") {
+            print_r($field);
+        }
+        $name = $field['FieldName'];
+        $value = $field['FieldValue'] ?? null;
+        foreach($columns as $column) {
+            if(!isset($total[$column])) {
+                $total[$column] = 0;
+            }
+            for ($i = 1; $i <= 12; $i++) {
+                if($name == "1-{$column}_{$i}" && is_numeric($value)) {
+                    $total[$column] = $total[$column] + intval($value);
+                    if($column == "Hours") {
+                        $average++;
+                    }
+                }
+            }
+        }
+        if (strpos($name, 'Remarks') !== false && isset($value) && $name !== "RemarksTotal" && $name !== "RemarksAverage") {
+            $int = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT);
+            if(is_numeric($int)) {
+                $total['Remarks'] = $total['Remarks'] + $int;
+            }
+        }
+    }
+    die();
+    $data = [];
+    foreach($columns as $column) {
+        $valueTotal = intval($total[$column]);
+        $valueAverage = $valueTotal / $average;
+        if($column == "Remarks") {
+            $data = array_merge($data, ["RemarksTotal" => $valueTotal], ["RemarksAverage" => round($valueAverage, 2)]);
+        }
+        else {
+            $data = array_merge($data, ["1-{$column}_Total" => $valueTotal], ["1-{$column}_Average" => round($valueAverage, 2)]);
+        }
+    }
+    savePDF($entry, $data);
 }
 
 function isWeekend($date) {
