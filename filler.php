@@ -12,10 +12,7 @@ use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-// Path to true-type fonts containig Arial
-// Filename must be exactly: arial.ttf
-Font::setTrueTypeFontPath('/usr/share/fonts/TTF/');
-Font::setAutoSizeMethod(Font::AUTOSIZE_METHOD_EXACT);
+Font::setAutoSizeMethod(Font::AUTOSIZE_METHOD_APPROX);
 
 // @TODO: Make month to be an ARG input as well
 $month = readline(lang('MONTH_INPUT'));
@@ -55,7 +52,7 @@ $monthName = $months[$month];
 $serviceYear = 2022; // @TODO: Make year to be an arg and user input
 $directory = sprintf("%s/pdf", getcwd());
 $prefix = 1;
-$suffix = $prefix > 1 ? "_{$prefix}" : '';
+$suffix = $prefix == 1 ? '' : '_2';
 
 // Reports
 $reportsFile = sprintf("%s/reports/%s-%s.csv", getcwd(), $serviceYear, $month);
@@ -119,6 +116,7 @@ if (true) {
             $file = sprintf("{$directory}/%s/{$file}", lang('FOLDER_PUBLISHER'));
             savePDF($file, $data);
             calcPDF($file);
+            cleanPDF($file);
         }
         // XLS
         $assignment = $report[0];
@@ -154,6 +152,7 @@ if (true) {
             $file = sprintf("%s/%s/%s.pdf", $directory, lang('FOLDER_TOTALS'), $data[6]);
             savePDF($file, $fill);
             calcPDF($file);
+            cleanPDF($file);
         }
         // Remove privilege labels
         unset($data[6]);
@@ -263,20 +262,23 @@ function savePDF($file, $data) {
 }
 
 function calcPDF($entry) {
-    $columns = ["Place", "Video", "Hours", "RV", "Studies", "Remarks"];
+    global $columns;
+    global $prefix;
+    global $suffix;
+
     $average = 0;
     $total = [];
+
     $pdfReader = new Pdf($entry);
-    $fields = $pdfReader->getDataFields();
-    foreach($fields as $index => $field) {
+    foreach($pdfReader->getDataFields() as $field) {
         $name = $field['FieldName'];
-        $value = $field['FieldValue'] ?? null;
-        foreach($columns as $column) {
+        $value = $field['FieldValue'] ?? 0;
+        foreach(array_keys($columns) as $column) {
             if(!isset($total[$column])) {
                 $total[$column] = 0;
             }
             for ($i = 1; $i <= 12; $i++) {
-                if($name == "1-{$column}_{$i}" && is_numeric($value)) {
+                if($name == "{$prefix}-{$column}_{$i}" && is_numeric($value)) {
                     $total[$column] = $total[$column] + intval($value);
                     if($column == "Hours") {
                         $average++;
@@ -284,25 +286,66 @@ function calcPDF($entry) {
                 }
             }
         }
-        if (strpos($name, 'Remarks') !== false && isset($value) && $name !== "RemarksTotal" && $name !== "RemarksAverage") {
-            $int = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT);
-            if(is_numeric($int)) {
-                $total['Remarks'] = $total['Remarks'] + $int;
+        if(str_starts_with($name, 'Remarks') && !str_contains($name, 'Average') && !str_contains($name, 'Total')) {
+            $endsWith = str_ends_with('_2', $name);
+            if(empty($suffix) ? !$endsWith : $endsWith) {
+                $int = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT);
+                if(is_numeric($int)) {
+                    $total['Remarks'] = $total['Remarks'] + $int;
+                }
             }
         }
     }
     $data = [];
-    foreach($columns as $column) {
+    foreach(array_keys($columns) as $column) {
         $valueTotal = intval($total[$column]);
         $valueAverage = $valueTotal / $average;
         if($column == "Remarks") {
-            $data = array_merge($data, ["RemarksTotal" => $valueTotal], ["RemarksAverage" => round($valueAverage, 2)]);
+            $data = array_merge($data,
+                ["RemarksTotal" => $valueTotal],
+                ["RemarksAverage" => round($valueAverage, 2)]
+            );
         }
         else {
-            $data = array_merge($data, ["1-{$column}_Total" => $valueTotal], ["1-{$column}_Average" => round($valueAverage, 2)]);
+            $data = array_merge($data,
+                ["{$prefix}-{$column}_Total" => $valueTotal],
+                ["{$prefix}-{$column}_Average" => round($valueAverage, 2)]
+            );
         }
     }
     savePDF($entry, $data);
+}
+
+function cleanPDF($entry) {
+    global $directory;
+    $data = [];
+    $pdfReader = new Pdf($entry);
+    $birth = 0;
+    foreach($pdfReader->getDataFields() as $field) {
+        $name = $field['FieldName'];
+        $value = $field['FieldValue'] ?? false;
+        if($value) {
+            if (preg_match('/^([0-9]{1,2})\\/([0-9]{1,2})\\/([0-9]{4})$/', $value)) {
+                if($name == "Date of birth") {
+                    $elapsed = (new DateTime())->diff(DateTime::createFromFormat('d/m/Y', $value))->format('%yy');
+                    $birth = $value;
+                    $value = "{$value}; {$elapsed} of age";
+                }
+                if($name == "Date immersed") {
+                    $elapsed = (new DateTime())->diff(DateTime::createFromFormat('d/m/Y', $value))->format('%yy');
+                    $fromBirth  = (DateTime::createFromFormat('d/m/Y', $birth))->diff(DateTime::createFromFormat('d/m/Y', $value))->format('%yy');
+                    $value = "{$value}; {$elapsed} of baptism; baptized with {$fromBirth}";
+                }
+            }
+            $data = array_merge($data, [$name => $value]);
+        }
+    }
+    $pdf = new Pdf(sprintf("%s/%s", $directory, 'S-21_E.pdf'));
+    $pdf->fillForm($data);
+    if (!$pdf->saveAs($entry)) {
+        die($pdf->getError());
+    }
+    print $entry . PHP_EOL;
 }
 
 function setSizeAndColors($sheet) {
@@ -337,7 +380,7 @@ function setSizeAndColors($sheet) {
                     $sheet->getStyle($cell)->getNumberFormat()->setFormatCode($format);
 
                     $isWeekend = isWeekend($date);
-                    $bg = is_null($isWeekend) ? Color::COLOR_WHITE : $isWeekend ? Color::COLOR_YELLOW : Color::COLOR_RED;
+                    $bg = is_null($isWeekend) ? Color::COLOR_WHITE : ($isWeekend ? Color::COLOR_YELLOW : Color::COLOR_RED);
                 }
             }
             $sheet->getStyle("{$cell}")->applyFromArray(getStyle($rowId == 1 ? 1 : $value, $bg ?? Color::COLOR_WHITE));
