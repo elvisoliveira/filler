@@ -121,6 +121,7 @@ foreach($segments as $privilege => $data) {
         $fill["{$indexColumns[5]}{$monthName}{$suffix}"] = intval($data[5]);
 
         $file = sprintf("%s/%s/%s.pdf", $directory, lang('FOLDER_TOTALS'), $data[6]);
+
         savePDF($file, $fill);
         calcPDF($file);
         cleanPDF($file);
@@ -141,53 +142,58 @@ function calcPDF($entry) {
     global $prefix;
     global $suffix;
 
+    $f = ['Remarks', 'Average', 'Total']; // meta fields
     $average = 0;
     $total = [];
 
-    $pdfReader = new Pdf($entry);
-    foreach($pdfReader->getDataFields() as $field) {
+    foreach((new Pdf($entry))->getDataFields() as $field) {
         $name = $field['FieldName'];
         $value = $field['FieldValue'] ?? 0;
+        // Evaluate each month of each column
         foreach(array_keys($columns) as $column) {
+            // Set initial value for each column calculated totals
             if(!isset($total[$column])) {
                 $total[$column] = 0;
             }
             for ($i = 1; $i <= 12; $i++) {
                 if($name == "{$prefix}-{$column}_{$i}" && is_numeric($value)) {
                     $total[$column] = $total[$column] + intval($value);
-                    if($column == "Hours") {
+                    // Count each filled hour column to calc averages
+                    if($column == 'Hours') {
                         $average++;
                     }
                 }
             }
         }
-        if(str_starts_with($name, 'Remarks') && !str_contains($name, 'Average') && !str_contains($name, 'Total')) {
+        if(str_starts_with($name, $f[0]) && !str_contains($name, $f[1]) && !str_contains($name, $f[2])) {
             $endsWith = str_ends_with('_2', $name);
             if(empty($suffix) ? !$endsWith : $endsWith) {
                 $int = (int) filter_var($value, FILTER_SANITIZE_NUMBER_INT);
                 if(is_numeric($int)) {
-                    $total['Remarks'] = $total['Remarks'] + $int;
+                    $total[$f[0]] = $total[$f[0]] + $int;
                 }
             }
         }
     }
+
     $data = [];
     foreach(array_keys($columns) as $column) {
         $valueTotal = intval($total[$column]);
-        $valueAverage = $valueTotal / $average;
-        if($column == "Remarks") {
+        $valueAverage = round(($valueTotal / $average), 2);
+        if($column == $f[0]) { // total and average of remarks column
             $data = array_merge($data,
-                ["RemarksTotal" => $valueTotal],
-                ["RemarksAverage" => round($valueAverage, 2)]
+                [$f[0] . $f[2] => $valueTotal],
+                [$f[0] . $f[1] => $valueAverage]
             );
         }
-        else {
+        else { // total and average of each column (but remarks)
             $data = array_merge($data,
-                ["{$prefix}-{$column}_Total" => $valueTotal],
-                ["{$prefix}-{$column}_Average" => round($valueAverage, 2)]
+                ["{$prefix}-{$column}_" . $f[2] => $valueTotal],
+                ["{$prefix}-{$column}_" . $f[1] => $valueAverage]
             );
         }
     }
+
     savePDF($entry, $data);
 }
 
@@ -196,20 +202,21 @@ function cleanPDF($entry) {
     global $directory;
 
     $data = [];
-    $pdfReader = new Pdf($entry);
     $birth = 0;
-    foreach($pdfReader->getDataFields() as $field) {
+    $f = ['Date of birth',  'Date immersed']; // fields to calc
+
+    foreach((new Pdf($entry))->getDataFields() as $field) {
         $name = $field['FieldName'];
         $value = $field['FieldValue'] ?? false;
         if($value) {
             if (preg_match('/^([0-9]{1,2})\\/([0-9]{1,2})\\/([0-9]{4})/', $value, $matches)) {
                 $date = $matches[0];
                 $elapsed = (new DateTime())->diff(DateTime::createFromFormat('d/m/Y', $date))->format('%yy');
-                if($name == "Date of birth") {
+                if($name == $f[0]) {
                     $birth = DateTime::createFromFormat('d/m/Y', $date);
                     $value = "{$date}; {$elapsed} of age";
                 }
-                if($name == "Date immersed") {
+                if($name == $f[1]) {
                     $fromBirth  = ($birth)->diff(DateTime::createFromFormat('d/m/Y', $date))->format('%yy');
                     $value = "{$date}; {$elapsed} of baptism; baptized with {$fromBirth}";
                 }
@@ -223,5 +230,6 @@ function cleanPDF($entry) {
     if (!$file->saveAs($entry)) {
         die($file->getError());
     }
-    print $entry . PHP_EOL;
+
+    print "Cleaned {$entry}" . PHP_EOL;
 }
