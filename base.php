@@ -40,7 +40,6 @@ function savePDF($file, $data) {
     print $file . PHP_EOL;
 }
 
-
 function setSizeAndColors($sheet) {
     foreach ($sheet->getRowIterator() as $row) {
         $rowId = $row->getRowIndex();

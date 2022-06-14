@@ -31,7 +31,7 @@ $fields = [
 ];
 
 // Meeting Attendance
-$meetingsFile = sprintf("%s/attendence/%s-%s.csv", getcwd(), $serviceYear, $month);
+$meetingsFile = sprintf("%s/attendence/%s-%s.csv", getcwd(), $serviceYear, str_pad($month, 2, '0', STR_PAD_LEFT));
 if (!file_exists($meetingsFile)) {
     die(lang('NOT_FOUND_ATTENDENCE'));
 }

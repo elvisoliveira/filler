@@ -44,7 +44,7 @@ $segments = [
 $monthName = $months[$month];
 
 // Reports
-$reportsFile = sprintf("%s/reports/%s-%s.csv", getcwd(), $serviceYear, $month);
+$reportsFile = sprintf("%s/reports/%s-%s.csv", getcwd(), $serviceYear, str_pad($month, 2, '0', STR_PAD_LEFT));
 if (!file_exists($reportsFile)) {
     die(lang('NOT_FOUND_REPORT'));
 }
@@ -85,6 +85,7 @@ foreach($reports as $file => $report) {
         $data["{$indexColumns[5]}{$monthName}{$suffix}"] = $report[6];
 
         $file = sprintf("{$directory}/%s/{$file}", lang('FOLDER_PUBLISHER'));
+
         savePDF($file, $data);
         calcPDF($file);
         cleanPDF($file);
@@ -99,8 +100,7 @@ foreach($reports as $file => $report) {
 
 setSizeAndColors($publisherSheet);
 
-// Remove Observation column for the next procedures
-array_pop($columns);
+array_pop($columns); // Remove Observation column for the next procedures
 
 $spreadsheet->createSheet();
 $spreadsheet->setActiveSheetIndex(1);
